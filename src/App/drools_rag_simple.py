@@ -19,7 +19,7 @@ class DroolsRAGPipeline:
         self.index = None
         self.metadata = None
 
-    def load_vector_db(self, faiss_path="faiss_index.bin", metadata_path="metadata.pkl"):
+    def load_vector_db(self, faiss_path="data/model/faiss_index.bin", metadata_path="data/model/metadata.pkl"):
         """Load FAISS index and metadata"""
         self.index = faiss.read_index(faiss_path)
         with open(metadata_path, 'rb') as f:
@@ -47,7 +47,7 @@ class DroolsRAGPipeline:
                 })
         return chunks
 
-    def load_form(self, form_path="output_form.md"):
+    def load_form(self, form_path="data/markdowns/output_form.md"):
         """Load form content"""
         with open(form_path, 'r', encoding='utf-8') as f:
             return f.read()
@@ -173,7 +173,7 @@ class DroolsRAGPipeline:
         - Do not change variable names or model fields from the form."""
         return prompt
 
-    def generate_drools(self, query, form_path="output_form.md", k=20):
+    def generate_drools(self, query, form_path="data/markdowns/output_form.md", k=15):
         """Main pipeline function"""
         # Load form content
         form_content = self.load_form(form_path)
@@ -219,11 +219,11 @@ if __name__ == "__main__":
     # print(drools_code)
 
     # Save to file
-    with open("generated_rule.drl", "w") as f:
+    with open("data/drools/generated_rule.drl", "w") as f:
         f.write(drools_code)
-    print("\nSaved to: generated_rule.drl")
+    print("\nSaved : generated_rule.drl")
 
-    with open("generated_rule_context.txt", "w") as f:
-        f.write("QUERY: " + query + "\n\n")
-        f.write(context)
-    print("\nSaved to: generated_rule_context.txt")
+    # with open("generated_rule_context.txt", "w") as f:
+    #     f.write("QUERY: " + query + "\n\n")
+    #     f.write(context)
+    # print("\nSaved to: generated_rule_context.txt")

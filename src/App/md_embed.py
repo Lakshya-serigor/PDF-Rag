@@ -161,9 +161,9 @@ def create_embeddings(chunks):
     faiss.normalize_L2(embeddings)
     index.add(embeddings)
 
-    faiss.write_index(index, "faiss_index.bin")
+    faiss.write_index(index, "data/model/faiss_index.bin")
 
-    with open("metadata.pkl", "wb") as f:
+    with open("data/model/metadata.pkl", "wb") as f:
         pickle.dump(chunks, f)
 
     print(f"Created {len(chunks)} chunks")

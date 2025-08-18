@@ -21,8 +21,8 @@ st.set_page_config(
 def load_search_index():
     """Load FAISS index and metadata (cached for performance)"""
     try:
-        index = faiss.read_index("faiss_index.bin")
-        with open("metadata.pkl", "rb") as f:
+        index = faiss.read_index("data/model/faiss_index.bin")
+        with open("data/model/metadata.pkl", "rb") as f:
             metadata = pickle.load(f)
         return index, metadata
     except Exception as e:
