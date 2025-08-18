@@ -1,7 +1,5 @@
-unstructured[pdf]==0.15.0
+pdfplumber
 python-dotenv==1.0.0
 openai==0.27.6
-
 numpy==1.24.0
 streamlit==1.28.1
-

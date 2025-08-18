@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
+
 import os, sys, time, argparse, logging
 from pathlib import Path
 from typing import List, Tuple, Dict
 from dotenv import load_dotenv
-from unstructured.partition.pdf import partition_pdf
+import pdfplumber
 from openai import OpenAI
 
 load_dotenv()
-
-os.environ["PATH"] += os.pathsep + r"C:\poppler-24.08.0\Library\bin"
-os.environ["PATH"] += os.pathsep + r"C:\Program Files\Tesseract-OCR"
-os.environ["TESSDATA_PREFIX"] = r"C:\Program Files\Tesseract-OCR\tessdata"
 
 DEFAULT_MODEL = "gpt-4o"
 DEFAULT_MAX_INPUT_TOKENS = 20000
@@ -27,16 +24,20 @@ client = OpenAI()
 def estimate_tokens(text): return int(len(text) * TOKENS_PER_CHAR)
 
 def extract_pages(pdf_path: str) -> Dict[int, str]:
-    elements = partition_pdf(
-        filename=pdf_path, strategy="auto", 
-        infer_table_structure=True, pdf_infer_table_structure=True,
-        ocr_languages="eng", extract_images_in_pdf=False
-    )
-    pages: Dict[int, List[str]] = {}
-    for el in elements:
-        pnum = getattr(el.metadata, "page_number", 1)
-        pages.setdefault(pnum, []).append(str(el))
-    return {p: "\n".join(txts) for p, txts in sorted(pages.items())}
+    pages = {}
+    with pdfplumber.open(pdf_path) as pdf:
+        for page_num, page in enumerate(pdf.pages, 1):
+            text = page.extract_text() or ""
+            tables = page.extract_tables()
+            
+            if tables:
+                for table in tables:
+                    if table and len(table) > 1:
+                        md_table = "\n".join(["| " + " | ".join(str(cell) if cell else "" for cell in row) + " |" for row in table])
+                        text += "\n\n" + md_table
+            
+            pages[page_num] = text
+    return pages
 
 def batch_text(batch_pages: List[Tuple[int, str]]) -> str:
     return "".join([f"\n\n--- PAGE {p} START ---\n{txt}\n--- PAGE {p} END ---\n" for p, txt in batch_pages])
