@@ -1,4 +1,3 @@
-
 import os
 import pickle
 import numpy as np
@@ -223,7 +222,7 @@ if __name__ == "__main__":
         f.write(drools_code)
     print("\nSaved : generated_rule.drl")
 
-    # with open("generated_rule_context.txt", "w") as f:
+    # with open("data/drools/generated_rule_context.txt", "w") as f:
     #     f.write("QUERY: " + query + "\n\n")
     #     f.write(context)
     # print("\nSaved to: generated_rule_context.txt")
