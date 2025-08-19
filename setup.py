@@ -52,8 +52,7 @@ def install_requirement(project_dir, venv_python):
 
     if not requirement_file.exists():
         print("Creating requirement.txt...")
-        basic_requirement =
-        """ streamlit
+        basic_requirement =""" streamlit
             openai
             faiss-cpu
             python-dotenv>=1.0.0           
