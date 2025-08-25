@@ -4,6 +4,7 @@ import numpy as np
 import faiss
 from openai import OpenAI
 from dotenv import load_dotenv
+import datetime
 
 # Load environment variables from .env file
 load_dotenv()
@@ -13,7 +14,6 @@ class DroolsRAGPipeline:
         self.api_key = os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not found in environment variables. Check your .env file.")
-
         self.client = OpenAI(api_key=self.api_key)
         self.index = None
         self.metadata = None
@@ -36,7 +36,6 @@ class DroolsRAGPipeline:
         """Search for relevant chunks"""
         query_embedding = self.embed_query(query).reshape(1, -1)
         scores, indices = self.index.search(query_embedding, k)
-
         chunks = []
         for score, idx in zip(scores[0], indices[0]):
             if idx >= 0 and idx < len(self.metadata):
@@ -51,128 +50,145 @@ class DroolsRAGPipeline:
         with open(form_path, 'r', encoding='utf-8') as f:
             return f.read()
 
-    def create_prompt(self, form_content, chunks, query):
-        """Create prompt for Drools generation"""
+    def load_java_model(self, java_path="MarylandForm502.java"):
+        """Load Java model file"""
+        try:
+            with open(java_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except FileNotFoundError:
+            return """// Java model file not found. Using default structure reference.
+public class MarylandForm502 {
+    // Add your Java model fields here
+}"""
+
+    def create_prompt(self, form_content, chunks, query, java_model_path="MarylandForm502.java"):
+        """Create prompt for Drools generation with Java model included"""
+
+        # Load Java model content
+        java_model_content = self.load_java_model(java_model_path)
+
         retrieved_context = "\n\n".join([
-            f"CHUNK {i+1}: {chunk['content']}" 
+            f"CHUNK {i+1}: {chunk['content']}"
             for i, chunk in enumerate(chunks)
         ])
+
         prompt = f"""System Role:
-        You are an expert in Maryland state tax laws and Drools rule engine development with 15+ years of experience.
-        Your task is to read:
-        1. A subset of the Maryland tax form (from the user query)
-        2. Retrieved authoritative rules from the Maryland rule booklet (via FAISS search)
-        …and produce ONLY a syntactically correct Drools `.drl` file.
+You are an expert in Maryland state tax laws and Drools rule engine development with 15+ years of experience.
 
-        **Key Requirements:**
-        - Use ONLY logic, tax rates, thresholds, and conditions explicitly present in the retrieved rule snippets.
-        - Use ONLY field names that exist in the provided form.
-        - Replicate EVERY conditional branch exactly as documented, including:
-        - County-specific local tax rates
-        - Special handling for counties like Anne Arundel & Frederick
-        - Different rates based on filing status & income thresholds
-        - DO NOT collapse multiple branches into a single formula.
-        - If any data is missing from retrieved snippets, insert `// TODO` comments in correct locations.
-        - Always end each Drools rule with `end`.
-        - No text output outside the `.drl` code.
+Your task is to read:
+1. A Java model class defining all available fields and structure
+2. A subset of the Maryland tax form (from the user query)
+3. Retrieved authoritative rules from the Maryland rule booklet (via FAISS search)
 
-        **Pipeline Inputs:**
-        FORM CONTENT:
-        {form_content}
-        Query:
-        {query}
-        (Form section related to the logic)
+...and produce ONLY a syntactically correct Drools `.drl` file.
 
-        {retrieved_context}
-        (Authoritative Maryland rule booklet excerpts containing the exact tax rates, income thresholds, and conditions)
+**Key Requirements:**
+- Use ONLY logic, tax rates, thresholds, and conditions explicitly present in the retrieved rule snippets.
+- Use ONLY field names that exist in the provided Java model class.
+- Access nested fields using proper dot notation (e.g., $form.getAddresses().getMarylandPhysical().getCounty())
+- Replicate EVERY conditional branch exactly as documented, including:
+  - County-specific local tax rates
+  - Special handling for counties like Anne Arundel & Frederick
+  - Different rates based on filing status & income thresholds
+- DO NOT collapse multiple branches into a single formula.
+- If any data is missing from retrieved snippets, insert `// TODO` comments in correct locations.
+- Always end each Drools rule with `end`.
+- No text output outside the `.drl` code.
 
-        **Execution Steps:**
-        1. Parse the **form section** to identify:
-        - Java model class and package name
-        - Exact field names available
-        2. Parse the **retrieved context** to extract:
-        - All county-specific logic
-        - Special rules and exemptions
-        - Income thresholds and filing status differences
-        3. Generate Drools code:
-        - Correct `package` declaration
-        - Correct `import` statement for the form’s Java class
-        - Full conditional branching logic from retrieved context
-        - Update statements for calculated values
+**JAVA MODEL CLASS:**
+```java
+{java_model_content}
+```
 
-        ---
+**FORM CONTENT:**
+{form_content}
 
-        **Output Format:**
-        package <derived.package.name>;
+**USER QUERY:**
+{query}
+(Form section related to the logic)
 
-        import <derived.package.for.JavaFormClass>;
+**RETRIEVED CONTEXT:**
+{retrieved_context}
+(Authoritative Maryland rule booklet excerpts containing the exact tax rates, income thresholds, and conditions)
 
-        rule "Calculate Line 28 - Local Tax Based on County"
-        when
-        $form : <JavaFormClass>(
-        <conditions from form and rules>
-        )
-        then
-        String county = $form.get<CountyField>().trim().toLowerCase();
-        double income = $form.get<TaxableIncomeField>();
-        int status = $form.get<FilingStatusField>();
-        double rate = 0.0225; // default nonresident
+**Execution Steps:**
+1. Parse the **Java model class** to identify:
+   - Package name and class structure
+   - Exact field names and their types
+   - Nested class relationships and access patterns
 
-        text
-        // FULL county and special-case logic from retrieved rules:
-        // Example from original DRL:
-        if (county.equals("baltimore city") || county.equals("baltimore county") /* ... */) (
-            rate = 0.0320;
-        ) else if (county.equals("allegany county") /* ... */) (
-            rate = 0.0303;
-        )
-        // ...
-        else if (county.equals("anne arundel county")) (
-            if (status == 1 || status == 3 || status == 6) (
-                rate = (income <= 50000) ? 0.0270 : 0.0281;
-            ) else (
-                if (income <= 75000) rate = 0.0270;
-                else if (income <= 480000) rate = 0.0281;
-                else rate = 0.0320;
-            )
-        )
-        else if (county.equals("frederick county")) (
-            if (status == 1 || status == 3 || status == 6) (
-                if (income <= 25000) rate = 0.0225;
-                else if (income <= 100000) rate = 0.0275;
-                else if (income <= 250000) rate = 0.0295;
-                else rate = 0.0320;
-            ) else (
-                if (income <= 50000) rate = 0.0225;
-                else if (income <= 200000) rate = 0.0275;
-                else if (income <= 350000) rate = 0.0295;
-                else rate = 0.0320;
-            )
-        )
+2. Parse the **form section** to understand:
+   - Which calculations are needed
+   - Input and output fields involved
 
-        $form.set<LocalTaxField>(income * rate);
-        update($form);
-        end
+3. Parse the **retrieved context** to extract:
+   - All county-specific logic
+   - Special rules and exemptions
+   - Income thresholds and filing status differences
 
-        text
+4. Generate Drools code:
+   - Correct `package` declaration
+   - Correct `import` statement for the Java class
+   - Full conditional branching logic from retrieved context
+   - Proper field access using getter methods or direct field access
+   - Update statements for calculated values
 
-        **Example Context Use:**
-        If the retrieved text contains:
-        Anne Arundel County: single/married filing separately/local brackets differ by taxable net income thresholds...
+**Output Format Example:**
+```
+package tax.rules
 
-        text
-        You MUST reproduce that **exact logic**, including numeric thresholds, inside the Drools `if/else` blocks.
+import com.example.MarylandForm502;
 
-        ---
+rule "Calculate Deduction Amount Line 17"
+when
+    $form : MarylandForm502(
+        deductions.method != null,
+        $method : deductions.method,
+        $income : line16MarylandAdjustedGrossIncome
+    )
+then
+    if ("standard".equals($method)) {{
+        double deduction;
+        int filingStatus = $form.filingStatus;
+        // Standard deduction thresholds (approximate as per Maryland guidelines)
+        if (filingStatus == 1 || filingStatus == 3 || filingStatus == 6) {{ // Single, Married Sep, Dependent
+            deduction = Math.max(1700, Math.min(2550, 0.15 * $income));
+        }} else {{ // Joint, HOH, Surviving Spouse
+            deduction = Math.max(3450, Math.min(5150, 0.15 * $income));
+        }}
+        $form.deductions.line17StandardDeduction = deduction;
+    }} else if ("itemized".equals($method) && 
+               $form.deductions.line17ItemizedDeductions != null) {{
+        double line17a = $form.deductions.line17ItemizedDeductions.line17aTotal;
+        double line17b = $form.deductions.line17ItemizedDeductions.line17bStateLocalTax;
+        $form.deductions.line17StandardDeduction = line17a - line17b;
+    }}
+end
+```
 
-        **Response Policy:**
-        - Your output must be a `.drl` file only.
-        - Do not summarize the rules — implement them in full.
-        - If part of the logic or a county rate is not retrieved, leave `// TODO: missing rate for <county>` in place of a hardcoded number.
-        - Do not change variable names or model fields from the form."""
+**Field Access Guidelines:**
+- For primitive fields: $form.getFieldName() or $form.fieldName
+- For nested objects: $form.getParentObject().getChildField()
+- For calculations: Use appropriate getter methods to access input values
+- For results: Use setter methods to update calculated fields
+
+**Example Context Use:**
+If the retrieved text contains:
+"Anne Arundel County: single/married filing separately/local brackets differ by taxable net income thresholds..."
+
+You MUST reproduce that **exact logic**, including numeric thresholds, inside the Drools `if/else` blocks.
+
+**Response Policy:**
+- Your output must be a `.drl` file only.
+- Do not summarize the rules — implement them in full.
+- Use proper Java field access patterns based on the provided model class.
+- If part of the logic or a county rate is not retrieved, leave `// TODO: missing rate for [county name]` in place of a hardcoded number.
+- Do not change variable names or model fields from the Java class.
+- Ensure all field references match the actual Java model structure."""
+
         return prompt
 
-    def generate_drools(self, query, form_path="data/markdowns/output_form.md", k=15):
+    def generate_drools(self, query, form_path="data/markdowns/output_form.md", java_model_path="data/Pdfs/MarylandForm502.java", k=15):
         """Main pipeline function"""
         # Load form content
         form_content = self.load_form(form_path)
@@ -180,17 +196,16 @@ class DroolsRAGPipeline:
         # Search for relevant chunks
         chunks = self.search_chunks(query, k)
         print(chunks)
-        
 
-        # Create prompt
-        prompt = self.create_prompt(form_content, chunks, query)
+        # Create prompt with Java model included
+        prompt = self.create_prompt(form_content, chunks, query, java_model_path)
 
         # Generate Drools code
         response = self.client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
-            max_tokens=3000
+            max_tokens=4000
         )
 
         return response.choices[0].message.content
@@ -207,20 +222,22 @@ if __name__ == "__main__":
     query = input("Enter your query: ")
     drools_code = pipeline.generate_drools(query)
     chunks = pipeline.search_chunks(query)
-    context = "\n\n".join([
-            f"CHUNK {i+1}: {chunk['content']}" 
-            for i, chunk in enumerate(chunks)
-        ])
 
+    context = "\n\n".join([
+        f"CHUNK {i+1}: {chunk['content']}"
+        for i, chunk in enumerate(chunks)
+    ])
 
     # print("\nGenerated Drools Code:")
     # print("=" * 50)
     # print(drools_code)
 
     # Save to file
-    with open("data/drools/generated_rule.drl", "w") as f:
+    timestamp = datetime.datetime.now().strftime("%m_%d_%H_%M")
+    filename = f"data/drools/generated_rule_{timestamp}.drl"
+    with open(filename, "w") as f:
         f.write(drools_code)
-    print("\nSaved : generated_rule.drl")
+    print("\nSaved :", {filename})
 
     # with open("data/drools/generated_rule_context.txt", "w") as f:
     #     f.write("QUERY: " + query + "\n\n")

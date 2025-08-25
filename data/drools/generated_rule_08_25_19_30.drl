@@ -1,0 +1,45 @@
+```drl
+package tax.rules
+
+import MarylandForm502;
+
+rule "Calculate Local Tax Line 28"
+when
+    $form : MarylandForm502(
+        line20TaxableNetIncome > 0,
+        $county : addresses.marylandPhysical.county,
+        $taxableNetIncome : line20TaxableNetIncome
+    )
+then
+    double localTaxRate;
+    switch ($county) {
+        case "Anne Arundel":
+            if ($form.filingStatus == 1 || $form.filingStatus == 3) { // Single or Married Filing Separately
+                if ($taxableNetIncome <= 100000) {
+                    localTaxRate = 0.025;
+                } else {
+                    localTaxRate = 0.0275;
+                }
+            } else { // Other filing statuses
+                localTaxRate = 0.0275;
+            }
+            break;
+        case "Frederick":
+            if ($form.filingStatus == 1 || $form.filingStatus == 3) { // Single or Married Filing Separately
+                if ($taxableNetIncome <= 50000) {
+                    localTaxRate = 0.026;
+                } else {
+                    localTaxRate = 0.028;
+                }
+            } else { // Other filing statuses
+                localTaxRate = 0.028;
+            }
+            break;
+        // TODO: missing rate for other counties
+        default:
+            localTaxRate = 0.03; // Default rate if county-specific rate is not provided
+    }
+    double localTax = $taxableNetIncome * localTaxRate;
+    $form.line28LocalTax = localTax;
+end
+```
