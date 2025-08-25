@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  pdf-rag-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pdf-rag-container
+    ports:
+      - "8501:8501"  # Drools RAG App
+      - "8502:8502"  # Search App
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - APP1_PORT=8501
+      - APP2_PORT=8502
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+    volumes:
+      # Persist data directories
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./.run:/app/.run
+      # Mount source code for development (optional - remove for production)
+      - ./src:/app/src
+      # Environment file
+      - ./.env:/app/.env:ro
+    networks:
+      - pdf-rag-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: pdf-rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - pdf-rag-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  nginx:
+    image: nginx:alpine
+    container_name: pdf-rag-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - pdf-rag-network
+    depends_on:
+      - pdf-rag-app
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+
+networks:
+  pdf-rag-network:
+    driver: bridge
