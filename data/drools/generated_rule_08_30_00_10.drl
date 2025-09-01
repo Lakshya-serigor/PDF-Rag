@@ -1,0 +1,106 @@
+```drl
+package tax.rules
+
+import MarylandForm502;
+
+rule "Calculate Local Tax Line 28"
+when
+    $form : MarylandForm502(
+        $taxableNetIncome : line20TaxableNetIncome,
+        $county : addresses.marylandPhysical.county,
+        $filingStatus : filingStatus
+    )
+then
+    double localTaxRate = 0.0;
+    double localTax = 0.0;
+
+    if ("Baltimore City".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("Allegany County".equals($county)) {
+        localTaxRate = 0.0303;
+    } else if ("Anne Arundel County".equals($county)) {
+        if ($filingStatus == 1 || $filingStatus == 3 || $filingStatus == 6) { // Single, Married Filing Separately, Dependent
+            if ($taxableNetIncome <= 50000) {
+                localTaxRate = 0.0270;
+            } else if ($taxableNetIncome <= 400000) {
+                localTaxRate = 0.0294;
+            } else {
+                localTaxRate = 0.0320;
+            }
+        } else { // Married Filing Jointly, Head of Household, Qualifying Widow(er)
+            if ($taxableNetIncome <= 50000) {
+                localTaxRate = 0.0270;
+            } else if ($taxableNetIncome <= 400000) {
+                localTaxRate = 0.0294;
+            } else {
+                localTaxRate = 0.0320;
+            }
+        }
+    } else if ("Baltimore County".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("Calvert County".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("Caroline County".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("Carroll County".equals($county)) {
+        localTaxRate = 0.0303;
+    } else if ("Cecil County".equals($county)) {
+        localTaxRate = 0.0274;
+    } else if ("Charles County".equals($county)) {
+        localTaxRate = 0.0303;
+    } else if ("Dorchester County".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("Frederick County".equals($county)) {
+        if ($filingStatus == 1 || $filingStatus == 3 || $filingStatus == 6) { // Single, Married Filing Separately, Dependent
+            if ($taxableNetIncome <= 25000) {
+                localTaxRate = 0.0225;
+            } else if ($taxableNetIncome <= 50000) {
+                localTaxRate = 0.0275;
+            } else if ($taxableNetIncome <= 150000) {
+                localTaxRate = 0.0296;
+            } else {
+                localTaxRate = 0.0320;
+            }
+        } else { // Married Filing Jointly, Head of Household, Qualifying Widow(er)
+            if ($taxableNetIncome <= 75000) {
+                localTaxRate = 0.0270;
+            } else if ($taxableNetIncome <= 480000) {
+                localTaxRate = 0.0294;
+            } else {
+                localTaxRate = 0.0320;
+            }
+        }
+    } else if ("Garrett County".equals($county)) {
+        localTaxRate = 0.0265;
+    } else if ("Harford County".equals($county)) {
+        localTaxRate = 0.0306;
+    } else if ("Howard County".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("Kent County".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("Montgomery County".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("Prince George’s County".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("Queen Anne’s County".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("St. Mary’s County".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("Somerset County".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("Talbot County".equals($county)) {
+        localTaxRate = 0.0240;
+    } else if ("Washington County".equals($county)) {
+        localTaxRate = 0.0295;
+    } else if ("Wicomico County".equals($county)) {
+        localTaxRate = 0.0320;
+    } else if ("Worcester County".equals($county)) {
+        localTaxRate = 0.0225;
+    } else {
+        // TODO: missing rate for [$county]
+    }
+
+    localTax = $taxableNetIncome * localTaxRate;
+    $form.line28LocalTax = localTax;
+end
+```

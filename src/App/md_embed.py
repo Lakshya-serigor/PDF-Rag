@@ -154,10 +154,10 @@ def create_embeddings(chunks):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     texts = [chunk['text'] for chunk in chunks]
-    response = client.embeddings.create(input=texts, model="text-embedding-3-small")
+    response = client.embeddings.create(input=texts, model="text-embedding-3-large")
     embeddings = np.array([v.embedding for v in response.data], dtype=np.float32)
 
-    index = faiss.IndexFlatIP(1536)
+    index = faiss.IndexFlatIP(3072)
     faiss.normalize_L2(embeddings)
     index.add(embeddings)
 

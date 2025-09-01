@@ -41,7 +41,7 @@ def search_similar(query, top_k=5, _index=None, _metadata=None):
         # Generate query embedding
         response = client.embeddings.create(
             input=[query],
-            model="text-embedding-3-small"
+            model="text-embedding-3-large"
         )
 
         query_embedding = np.array([response.data[0].embedding], dtype=np.float32)
@@ -51,14 +51,40 @@ def search_similar(query, top_k=5, _index=None, _metadata=None):
         scores, indices = _index.search(query_embedding, top_k)
 
         # Prepare results with metadata
-        results = []
-        for score, idx in zip(scores[0], indices[0]):
-            if idx < len(_metadata):
-                result = _metadata[idx].copy()
-                result['similarity_score'] = float(score)
-                results.append(result)
+        # results = []
+        # for score, idx in zip(scores[0], indices[0]):
+        #     if idx < len(_metadata):
+        #         result = _metadata[idx].copy()
+        #         result['similarity_score'] = float(score)
+        #         results.append(result)
 
-        return results
+        # return results
+        chunks = []
+        seen_embeddings = []
+        
+        for score, idx in zip(scores[0], indices[0]):
+            if idx >= 0 and idx < len(_metadata):
+                # Get current chunk embedding for similarity check
+                current_emb = _index.reconstruct(int(idx))
+                
+                # Check if too similar to already selected chunks
+                too_similar = False
+                for prev_emb in seen_embeddings:
+                    similarity = np.dot(current_emb, prev_emb)
+                    if similarity > 0.95:  # 95% similarity threshold
+                        too_similar = True
+                        break
+                
+                if not too_similar:
+                    chunks.append({
+                        'text': _metadata[idx].get('text', ''),
+                        'similarity_score': float(score)
+                    })
+                    seen_embeddings.append(current_emb)
+                    
+                    if len(chunks) >= top_k:
+                        break
+        return chunks
 
     except Exception as e:
         st.error(f"Search failed: {e}")
@@ -67,7 +93,7 @@ def search_similar(query, top_k=5, _index=None, _metadata=None):
 def main():
     # App header
     st.title("🔍 PDF Semantic Search")
-    st.markdown("Search through your PDF documents using AI-powered semantic similarity")
+    st.markdown("Search through your PDF documents using semantic similarity")
 
     # Sidebar configuration
     st.sidebar.header("⚙️ Search Settings")
