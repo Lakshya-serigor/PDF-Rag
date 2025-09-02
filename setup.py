@@ -16,7 +16,7 @@ def run_command(command, cwd=None):
 
 def clone_repository():
     """Clone the PDF RAG repository"""
-    repo_url = "https://github.com/lakshy-606/PDF-Rag.git"
+    repo_url = "https://github.com/Lakshya-serigor/PDF-Rag"
     project_dir = "PDF-Rag"
 
     if Path(project_dir).exists():
